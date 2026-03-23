@@ -48,9 +48,9 @@
         let word = "";
         try {
             const params = new URLSearchParams(window.location.search);
-            const hex = params.get('challenge');
-            if (!hex) throw new Error('missing');
-            word = hex.match(/.{1,2}/g).map(b => String.fromCharCode(parseInt(b, 16))).join('').toUpperCase().trim();
+            const b64 = params.get('challenge');
+            if (!b64) throw new Error('missing');
+            word = b64DecodeUnicode(b64).toUpperCase().trim();
         } catch(e) { word = "ERRORE"; }
 
         const L = word.length;
