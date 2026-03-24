@@ -147,7 +147,7 @@
                 return;
             }
             const encoded = b64EncodeUnicode(raw);
-            const link = `https://aleborgi.github.io/?challenge=${encoded}`;
+            const link = `https://aleborgi.github.io/orawordlio/?challenge=${encoded}`;
             document.getElementById('generatedLink').textContent = link;
             document.getElementById('linkPreviewBox').classList.remove('hidden');
             document.getElementById('copyBtn').textContent = 'Copia';
