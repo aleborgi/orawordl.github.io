@@ -12,20 +12,61 @@
         .absent { background-color: #1e293b !important; border-color: #1e293b !important; color: #475569 !important; }
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         .pop { animation: pop 0.1s ease-in-out; }
+
+        /* Generator popup */
+        #generatorModal { backdrop-filter: blur(6px); }
+        #generatorModal .inner {
+            background: linear-gradient(145deg, #0f172a, #1e293b);
+            border: 2px solid #334155;
+            box-shadow: 0 0 60px rgba(5,150,105,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        #wordInput {
+            caret-color: #10b981;
+            letter-spacing: 0.08em;
+        }
+        #wordInput:focus { box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
+
+        #generatedLink {
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+        }
+        .copy-btn { transition: all 0.15s; }
+        .copy-btn:active { transform: scale(0.95); }
+
+        /* Glow button */
+        #openGeneratorBtn {
+            background: linear-gradient(135deg, #064e3b, #065f46);
+            border: 1.5px solid #059669;
+            box-shadow: 0 0 14px rgba(5,150,105,0.25);
+            transition: all 0.2s;
+        }
+        #openGeneratorBtn:hover {
+            box-shadow: 0 0 22px rgba(5,150,105,0.45);
+            background: linear-gradient(135deg, #065f46, #047857);
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-white min-h-screen flex flex-col items-center py-6 font-sans overflow-x-hidden">
 
     <div class="w-full max-w-4xl flex flex-col items-center px-4">
         <h1 class="text-3xl font-black mb-6 text-emerald-500 italic uppercase tracking-tighter">Ora Wordl.io</h1>
-        
-        <input id="studentName" type="text" placeholder="Inserisci nickname" 
-               class="w-full max-w-sm bg-slate-900 border-2 border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-emerald-500 mb-8 text-center text-xl shadow-2xl transition-all">
+
+        <!-- Nome + Bottone genera -->
+        <div class="w-full max-w-sm flex gap-2 mb-8">
+            <input id="studentName" type="text" placeholder="Inserisci nickname"
+                   class="flex-1 bg-slate-900 border-2 border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-emerald-500 text-center text-xl shadow-2xl transition-all">
+            <button id="openGeneratorBtn" onclick="openGenerator()"
+                    class="rounded-xl px-4 py-3 font-bold text-emerald-300 text-sm uppercase tracking-wider whitespace-nowrap">
+                ✦ Genera
+            </button>
+        </div>
 
         <div id="grid" class="grid gap-2 mb-8 justify-center"></div>
         <div id="keyboard" class="w-full max-w-2xl flex flex-col gap-1.5 mt-auto pb-4"></div>
     </div>
 
+    <!-- Modale vittoria -->
     <div id="modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
         <div class="bg-slate-900 p-8 rounded-3xl text-center border-2 border-emerald-500 shadow-2xl max-w-xs w-full">
             <h2 class="text-3xl font-black mb-2 text-emerald-400 uppercase">Ottimo!</h2>
@@ -34,18 +75,101 @@
         </div>
     </div>
 
+    <!-- Modale generatore -->
+    <div id="generatorModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="inner rounded-3xl p-8 max-w-sm w-full relative">
+
+            <!-- Close -->
+            <button onclick="closeGenerator()" class="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-2xl leading-none font-bold transition">×</button>
+
+            <h2 class="text-xl font-black text-emerald-400 uppercase tracking-widest mb-1">Genera Sfida</h2>
+            <p class="text-slate-400 text-sm mb-6">Scegli una parola e condividi il link con i tuoi studenti.</p>
+
+            <!-- Input parola -->
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Parola</label>
+            <input id="wordInput" type="text"
+                   placeholder="Es. SCUOLA"
+                   oninput="onWordInput()"
+                   class="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 outline-none text-white text-xl text-center uppercase font-bold tracking-widest transition-all mb-5">
+
+            <!-- Preview link -->
+            <div id="linkPreviewBox" class="hidden mb-5">
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Link generato</label>
+                <div class="bg-slate-950 border border-slate-700 rounded-xl p-3 flex items-start gap-2">
+                    <span id="generatedLink" class="text-emerald-400 flex-1 select-all"></span>
+                    <button onclick="copyLink()" class="copy-btn flex-shrink-0 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" id="copyBtn">
+                        Copia
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bottone Genera -->
+            <button onclick="generateLink()"
+                    class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 py-4 rounded-xl font-black uppercase tracking-widest text-white transition-all duration-150 shadow-lg">
+                Genera Link →
+            </button>
+        </div>
+    </div>
+
     <script>
+        /* ── Utility ── */
         function b64DecodeUnicode(str) {
             return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
         }
+        function b64EncodeUnicode(str) {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
+        }
 
+        /* ── Generator popup ── */
+        function openGenerator() {
+            document.getElementById('generatorModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('wordInput').focus(), 50);
+        }
+        function closeGenerator() {
+            document.getElementById('generatorModal').classList.add('hidden');
+        }
+        function onWordInput() {
+            // Reset link preview when user changes word
+            document.getElementById('linkPreviewBox').classList.add('hidden');
+        }
+        function generateLink() {
+            const raw = document.getElementById('wordInput').value.trim().toUpperCase();
+            if (!raw) {
+                const inp = document.getElementById('wordInput');
+                inp.classList.add('border-red-500');
+                inp.placeholder = 'Inserisci una parola!';
+                setTimeout(() => { inp.classList.remove('border-red-500'); inp.placeholder = 'Es. SCUOLA'; }, 1500);
+                return;
+            }
+            const encoded = b64EncodeUnicode(raw);
+            const link = `https://aleborgi.github.io/?challenge=${encoded}`;
+            document.getElementById('generatedLink').textContent = link;
+            document.getElementById('linkPreviewBox').classList.remove('hidden');
+            document.getElementById('copyBtn').textContent = 'Copia';
+        }
+        function copyLink() {
+            const link = document.getElementById('generatedLink').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = '✓ Copiato';
+                btn.classList.add('bg-emerald-600');
+                setTimeout(() => { btn.textContent = 'Copia'; btn.classList.remove('bg-emerald-600'); }, 2000);
+            });
+        }
+
+        // Chiudi cliccando fuori
+        document.getElementById('generatorModal').addEventListener('click', function(e) {
+            if (e.target === this) closeGenerator();
+        });
+
+        /* ── Game logic ── */
         const KEYBOARD_KEYS = [
             ['Q','W','E','R','T','Y','U','I','O','P','È','É'],
             ['A','S','D','F','G','H','J','K','L','Ò','À'],
-            ['Z','X','C','V','B','N','M','Ì','Ù','⌫',]
-            ['INVIO','SPACE'],
+            ['Z','X','C','V','B','N','M','Ì','Ù','⌫'],
+            ['INVIO'],
         ];
-        
+
         function isValidBase64(str) {
             if (!str || str.length % 4 !== 0) return false;
             return /^[A-Za-z0-9+/]*={0,2}$/.test(str);
@@ -63,7 +187,7 @@
 
         const L = word.length;
         let currentAttempt = 0, guesses = ["", "", "", "", "", ""], gameOver = false;
-        const keyStates = {}; 
+        const keyStates = {};
 
         const grid = document.getElementById('grid');
         grid.style.gridTemplateColumns = `repeat(${L}, minmax(0, 1fr))`;
@@ -82,7 +206,7 @@
             row.forEach(key => {
                 const btn = document.createElement('button');
                 btn.innerText = key;
-                btn.id = 'key-' + key; 
+                btn.id = 'key-' + key;
                 btn.className = `h-14 rounded-lg font-bold select-none transition-all duration-500 ${key.length > 1 ? 'bg-slate-600 px-4 text-[10px]' : 'bg-slate-800 flex-1'}`;
                 btn.onclick = (e) => { e.preventDefault(); handleKey(key); };
                 rowDiv.appendChild(btn);
@@ -93,10 +217,10 @@
         function handleKey(key) {
             if (gameOver || document.activeElement.id === 'studentName') return;
             const nameInput = document.getElementById('studentName');
-            if (!nameInput.value.trim()) { 
+            if (!nameInput.value.trim()) {
                 nameInput.classList.add('border-red-500', 'animate-pulse');
-                nameInput.focus(); 
-                return; 
+                nameInput.focus();
+                return;
             }
             nameInput.readOnly = true;
             nameInput.classList.remove('animate-pulse', 'border-red-500');
@@ -170,10 +294,16 @@
 
         window.addEventListener('keydown', (e) => {
             if (document.activeElement.id === 'studentName') return;
+            if (document.activeElement.id === 'wordInput') return;
             const k = e.key.toUpperCase();
             if (k === 'ENTER') handleKey('INVIO');
             else if (k === 'BACKSPACE') handleKey('⌫');
-            else if (/^[A-ZĞÜŞİÖÇ]$/.test(k)) handleKey(k);
+            else if (/^[A-ZÀÈÉÌÒÙ]$/.test(k)) handleKey(k);
+        });
+
+        // ESC chiude il generatore
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeGenerator();
         });
     </script>
 </body>
