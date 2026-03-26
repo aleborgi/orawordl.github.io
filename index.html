@@ -96,289 +96,129 @@
         </div>
     </div>
 
-    <script>
-        /* ── Utility ── */
-        function b64DecodeUnicode(str) {
-            return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        }
-        function b64EncodeUnicode(str) {
-            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
-        }
+    <!-- IDENTICO FINO ALLA FUNZIONE checkRow() ... -->
 
-        /* ── Generator popup ── */
-        function openGenerator() { document.getElementById('generatorModal').classList.remove('hidden'); setTimeout(() => document.getElementById('wordInput').focus(), 50); }
-        function closeGenerator() { document.getElementById('generatorModal').classList.add('hidden'); }
-        function onWordInput() { document.getElementById('linkPreviewBox').classList.add('hidden'); }
-        function generateLink() {
-            const raw = document.getElementById('wordInput').value.trim().toUpperCase();
-            if (!raw) {
-                const inp = document.getElementById('wordInput');
-                inp.classList.add('border-red-500'); inp.placeholder = 'Inserisci una parola!';
-                setTimeout(() => { inp.classList.remove('border-red-500'); inp.placeholder = 'Es. SCUOLA'; }, 1500);
-                return;
+<script>
+/* tutto il tuo codice invariato sopra */
+
+/* ── SOSTITUISCI SOLO QUESTA FUNZIONE ── */
+function checkRow() {
+    const guessArr = guesses[currentAttempt];
+    const letterIndices = [];
+    for (let i = 0; i < L; i++) {
+        if (!spacePositions.has(i)) letterIndices.push(i);
+    }
+
+    const status = {};
+
+    // STEP 1 + 2 (CORRECT + PRESENT) → UGUALE
+    wordGroups.forEach((grp, gi) => {
+        const targetLetters = grp.map(ti => word[ti]);
+        const guessedLetters = grp.map(ti => guessArr[ti]);
+
+        const remaining = [...targetLetters];
+
+        // correct
+        grp.forEach((ti, pos) => {
+            if (guessedLetters[pos] === targetLetters[pos]) {
+                status[ti] = 'correct';
+                remaining[pos] = null;
             }
-            const encoded = b64EncodeUnicode(raw);
-            const link = `https://aleborgi.github.io/orawordlio/?challenge=${encoded}`;
-            document.getElementById('generatedLink').textContent = link;
-            document.getElementById('linkPreviewBox').classList.remove('hidden');
-            document.getElementById('copyBtn').textContent = 'Copia';
-        }
-        function copyLink() {
-            const link = document.getElementById('generatedLink').textContent;
-            navigator.clipboard.writeText(link).then(() => {
-                const btn = document.getElementById('copyBtn');
-                btn.textContent = '✓ Copiato'; btn.classList.add('bg-emerald-600');
-                setTimeout(() => { btn.textContent = 'Copia'; btn.classList.remove('bg-emerald-600'); }, 2000);
-            });
-        }
-        document.getElementById('generatorModal').addEventListener('click', function(e) { if (e.target === this) closeGenerator(); });
-
-        /* ── Game logic ── */
-        const KEYBOARD_KEYS = [
-            ['Q','W','E','R','T','Y','U','I','O','P','È','É'],
-            ['A','S','D','F','G','H','J','K','L','Ò','À'],
-            ['Z','X','C','V','B','N','M','Ì','Ù','⌫','INVIO'],
-        ];
-
-        function isValidBase64(str) {
-            if (!str || str.length % 4 !== 0) return false;
-            return /^[A-Za-z0-9+/]*={0,2}$/.test(str);
-        }
-
-        let word = "";
-        try {
-            const params = new URLSearchParams(window.location.search);
-            const b64 = params.get('challenge');
-            if (!b64) throw new Error('missing');
-            if (!isValidBase64(b64)) throw new Error('invalid base64');
-            word = b64DecodeUnicode(b64).toUpperCase().trim().replace(/\s+/g, ' ');
-            if (!word || word.replace(/ /g,'').length < 2) throw new Error('empty word');
-        } catch(e) { word = "ERRORE"; }
-
-        /* ── Multi-word support ── */
-        const spacePositions = new Set();
-        for (let i = 0; i < word.length; i++) { if (word[i] === ' ') spacePositions.add(i); }
-        const L = word.length;
-        const letterCount = word.replace(/ /g, '').length;
-
-        // wordGroups: array of arrays of tile-indices per word
-        const wordGroups = [];
-        let group = [];
-        for (let i = 0; i < L; i++) {
-            if (word[i] === ' ') { if (group.length) { wordGroups.push(group); group = []; } }
-            else group.push(i);
-        }
-        if (group.length) wordGroups.push(group);
-
-        // Mostra legenda solo se ci sono più parole
-        if (wordGroups.length > 1) {
-            document.getElementById('legend').classList.remove('hidden');
-            document.getElementById('legend').classList.add('flex');
-        }
-
-        // Per ogni tile-index, a quale wordGroup (indice) appartiene?
-        const tileToWordGroup = {};
-        wordGroups.forEach((grp, gi) => grp.forEach(ti => { tileToWordGroup[ti] = gi; }));
-
-        let currentAttempt = 0;
-        let guesses = Array(6).fill(null).map(() => Array(L).fill(''));
-        let gameOver = false;
-        const keyStates = {}; // 'correct' > 'present' > 'wrong-word' > 'absent'
-
-        /* ── Build grid ── */
-        const grid = document.getElementById('grid');
-        const totalCols = L - spacePositions.size;
-        const cellSize = totalCols > 9 ? 'w-8 h-10 sm:w-10 sm:h-12 text-lg' : 'w-12 h-12 sm:w-14 sm:h-14 text-2xl';
-
-        for (let r = 0; r < 6; r++) {
-            const rowDiv = document.createElement('div');
-            rowDiv.className = 'row-flex';
-            wordGroups.forEach((grp, gi) => {
-                const wDiv = document.createElement('div');
-                wDiv.className = 'word-group';
-                grp.forEach(ci => {
-                    const div = document.createElement('div');
-                    div.id = `tile-${r}-${ci}`;
-                    div.className = `${cellSize} border-2 border-slate-800 flex items-center justify-center font-bold uppercase cell rounded-lg bg-slate-900/50`;
-                    wDiv.appendChild(div);
-                });
-                rowDiv.appendChild(wDiv);
-                if (gi < wordGroups.length - 1) {
-                    const sep = document.createElement('div'); sep.className = 'word-separator'; rowDiv.appendChild(sep);
-                }
-            });
-            grid.appendChild(rowDiv);
-        }
-
-        /* ── Keyboard ── */
-        const kb = document.getElementById('keyboard');
-        KEYBOARD_KEYS.forEach(row => {
-            const rowDiv = document.createElement('div'); rowDiv.className = "flex justify-center gap-1";
-            row.forEach(key => {
-                const btn = document.createElement('button');
-                btn.innerText = key; btn.id = 'key-' + key;
-                btn.className = `h-14 rounded-lg font-bold select-none transition-all duration-500 ${key.length > 1 ? 'bg-slate-600 px-4 text-[10px]' : 'bg-slate-800 flex-1'}`;
-                btn.onclick = (e) => { e.preventDefault(); handleKey(key); };
-                rowDiv.appendChild(btn);
-            });
-            kb.appendChild(rowDiv);
         });
 
-        function typedCount() { return guesses[currentAttempt].filter((c,i) => !spacePositions.has(i) && c !== '').length; }
-        function nextLetterIdx() { for (let i = 0; i < L; i++) { if (!spacePositions.has(i) && guesses[currentAttempt][i] === '') return i; } return -1; }
-        function lastFilledLetterIdx() { for (let i = L - 1; i >= 0; i--) { if (!spacePositions.has(i) && guesses[currentAttempt][i] !== '') return i; } return -1; }
-
-        function handleKey(key) {
-            if (gameOver) return;
-
-            if (key === '⌫') {
-                const li = lastFilledLetterIdx(); if (li !== -1) guesses[currentAttempt][li] = '';
-            } else if (key === 'INVIO') {
-                if (typedCount() === letterCount) checkRow();
-            } else if (key.length === 1) {
-                if (typedCount() < letterCount) {
-                    const ni = nextLetterIdx();
-                    if (ni !== -1) {
-                        guesses[currentAttempt][ni] = key;
-                        for (let i = ni + 1; i < L; i++) {
-                            if (spacePositions.has(i)) guesses[currentAttempt][i] = ' ';
-                            else break;
-                        }
-                    }
-                }
+        // present
+        grp.forEach((ti, pos) => {
+            if (status[ti]) return;
+            const g = guessedLetters[pos];
+            const idx = remaining.indexOf(g);
+            if (idx !== -1) {
+                status[ti] = 'present';
+                remaining[idx] = null;
             }
-            updateVisuals();
-        }
-
-        function updateVisuals() {
-            for (let ci = 0; ci < L; ci++) {
-                if (spacePositions.has(ci)) continue;
-                const tile = document.getElementById(`tile-${currentAttempt}-${ci}`);
-                if (!tile) continue;
-                tile.innerText = guesses[currentAttempt][ci] || "";
-                if (tile.innerText) tile.classList.add('pop'); else tile.classList.remove('pop');
-            }
-        }
-
-        /* ── Priority order for keyStates ── */
-        const statusPriority = { 'correct': 4, 'present': 3, 'wrong-word': 2, 'absent': 1 };
-        function upgradeKey(letter, newStatus) {
-            const cur = keyStates[letter];
-            if (!cur || statusPriority[newStatus] > statusPriority[cur]) keyStates[letter] = newStatus;
-        }
-
-        function updateKeyboardUI() {
-            for (const [letter, status] of Object.entries(keyStates)) {
-                const btn = document.getElementById('key-' + letter);
-                if (!btn) continue;
-                if (status === 'correct') {
-                    btn.style.backgroundColor = '#059669'; btn.style.color = 'white'; btn.style.opacity = '1';
-                } else if (status === 'present') {
-                    btn.style.backgroundColor = '#ca8a04'; btn.style.color = 'white'; btn.style.opacity = '1';
-                } else if (status === 'wrong-word') {
-                    btn.style.backgroundColor = '#7c3aed'; btn.style.color = 'white'; btn.style.opacity = '1';
-                } else if (status === 'absent') {
-                    btn.style.backgroundColor = '#0f172a'; btn.style.color = '#475569'; btn.style.opacity = '0.5';
-                }
-            }
-        }
-
-        function checkRow() {
-            const guessArr = guesses[currentAttempt];
-            const letterIndices = []; // tile-indices of non-space positions, in order
-            for (let i = 0; i < L; i++) { if (!spacePositions.has(i)) letterIndices.push(i); }
-
-            // Per ogni word-group, prepariamo le lettere della parola target e le lettere indovinate
-            // status[tileIndex] = 'correct' | 'present' | 'wrong-word' | 'absent'
-            const status = {};
-
-            wordGroups.forEach((grp, gi) => {
-                const targetLetters = grp.map(ti => word[ti]);       // lettere corrette di questa parola
-                const guessedLetters = grp.map(ti => guessArr[ti]);  // lettere inserite in questa parola
-
-                const remaining = [...targetLetters]; // copia per tracking
-
-                // Primo passaggio: posizioni corrette
-                grp.forEach((ti, pos) => {
-                    if (guessedLetters[pos] === targetLetters[pos]) {
-                        status[ti] = 'correct';
-                        remaining[pos] = null;
-                    }
-                });
-
-                // Secondo passaggio: present / absent (nella stessa parola)
-                grp.forEach((ti, pos) => {
-                    if (status[ti] === 'correct') return;
-                    const g = guessedLetters[pos];
-                    const idx = remaining.indexOf(g);
-                    if (idx !== -1) {
-                        status[ti] = 'present'; // nella stessa parola, posizione sbagliata
-                        remaining[idx] = null;
-                    }
-                    // Se non trovata nella propria parola, verrà marcata dopo
-                });
-            });
-
-            // Terzo passaggio: per le celle ancora senza status,
-            // controlla se la lettera esiste in UN'ALTRA parola → 'wrong-word', altrimenti 'absent'
-            const allWordLetters = Array.from(word).filter((c,i) => !spacePositions.has(i)); // tutte le lettere della frase
-
-            letterIndices.forEach(ti => {
-                if (status[ti]) return; // già assegnato (correct o present)
-                const g = guessArr[ti];
-                const myGroup = tileToWordGroup[ti];
-
-                // La lettera esiste in qualche altra parola del target?
-                let inOtherWord = false;
-                wordGroups.forEach((grp, gi) => {
-                    if (gi === myGroup) return;
-                    if (grp.some(idx => word[idx] === g)) inOtherWord = true;
-                });
-
-                status[ti] = inOtherWord ? 'wrong-word' : 'absent';
-            });
-
-            // Aggiorna tastiera
-            letterIndices.forEach(ti => {
-                const g = guessArr[ti];
-                upgradeKey(g, status[ti]);
-            });
-
-            // Anima tiles
-            letterIndices.forEach((ti, order) => {
-                const tile = document.getElementById(`tile-${currentAttempt}-${ti}`);
-                setTimeout(() => {
-                    tile.classList.add(status[ti]);
-                    if (order === letterIndices.length - 1) updateKeyboardUI();
-                }, order * 100);
-            });
-
-            // Check vittoria
-            const wordLetters = Array.from(word).filter((c,i) => !spacePositions.has(i));
-            const guessLetters = letterIndices.map(ti => guessArr[ti]);
-            const won = guessLetters.every((g, j) => g === wordLetters[j]);
-
-            if (won) {
-                gameOver = true;
-                setTimeout(() => {
-                    document.getElementById('modal').classList.remove('hidden');
-                    document.getElementById('stats').innerText = `Hai indovinato in ${currentAttempt + 1} tentativi!`;
-                }, letterIndices.length * 100 + 400);
-            } else if (++currentAttempt === 6) {
-                gameOver = true;
-                alert("Risposta corretta: " + word);
-            }
-        }
-
-        window.addEventListener('keydown', (e) => {
-            if (document.activeElement.id === 'wordInput') return;
-            const k = e.key.toUpperCase();
-            if (k === 'ENTER') handleKey('INVIO');
-            else if (k === 'BACKSPACE') handleKey('⌫');
-            else if (/^[A-ZÀÈÉÌÒÙ]$/.test(k)) handleKey(k);
         });
+    });
 
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGenerator(); });
-    </script>
+    // 🧠 NUOVA LOGICA INTELLIGENTE PER VIOLA
+
+    // Conteggio lettere per ogni parola
+    const wordLetterCounts = wordGroups.map(grp => {
+        const count = {};
+        grp.forEach(i => {
+            const l = word[i];
+            count[l] = (count[l] || 0) + 1;
+        });
+        return count;
+    });
+
+    // Consuma lettere già usate (correct + present)
+    wordGroups.forEach((grp, gi) => {
+        grp.forEach(ti => {
+            if (status[ti] === 'correct' || status[ti] === 'present') {
+                const l = guessArr[ti];
+                if (wordLetterCounts[gi][l] > 0) {
+                    wordLetterCounts[gi][l]--;
+                }
+            }
+        });
+    });
+
+    // STEP 3 migliorato (WRONG-WORD vs ABSENT)
+    letterIndices.forEach(ti => {
+        if (status[ti]) return;
+
+        const g = guessArr[ti];
+        const myGroup = tileToWordGroup[ti];
+
+        let foundGroup = -1;
+
+        for (let gi = 0; gi < wordGroups.length; gi++) {
+            if (gi === myGroup) continue;
+
+            if (wordLetterCounts[gi][g] > 0) {
+                foundGroup = gi;
+                break;
+            }
+        }
+
+        if (foundGroup !== -1) {
+            status[ti] = 'wrong-word';
+            wordLetterCounts[foundGroup][g]--; // 🔥 consuma
+        } else {
+            status[ti] = 'absent';
+        }
+    });
+
+    // Tastiera
+    letterIndices.forEach(ti => {
+        const g = guessArr[ti];
+        upgradeKey(g, status[ti]);
+    });
+
+    // Animazioni
+    letterIndices.forEach((ti, order) => {
+        const tile = document.getElementById(`tile-${currentAttempt}-${ti}`);
+        setTimeout(() => {
+            tile.classList.add(status[ti]);
+            if (order === letterIndices.length - 1) updateKeyboardUI();
+        }, order * 100);
+    });
+
+    // Vittoria
+    const wordLetters = Array.from(word).filter((c,i) => !spacePositions.has(i));
+    const guessLetters = letterIndices.map(ti => guessArr[ti]);
+    const won = guessLetters.every((g, j) => g === wordLetters[j]);
+
+    if (won) {
+        gameOver = true;
+        setTimeout(() => {
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('stats').innerText = `Hai indovinato in ${currentAttempt + 1} tentativi!`;
+        }, letterIndices.length * 100 + 400);
+    } else if (++currentAttempt === 6) {
+        gameOver = true;
+        alert("Risposta corretta: " + word);
+    }
+}
+</script>
 </body>
 </html>
